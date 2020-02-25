@@ -1,0 +1,3 @@
+[submodule "obfsX"]
+	path = obfsX
+	url = git@github.com:RACECAR-GU/obfsX.git

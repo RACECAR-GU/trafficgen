@@ -66,7 +66,7 @@ USER user
 ENV GOROOT=/usr/local/go
 ENV GOPATH=/code/go
 ENV PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
-ADD --chown=user obfs5/ obfs5/
+ADD --chown=user obfsX/ obfs5/
 WORKDIR /code/obfs5
 #RUN go get -insecure git.torproject.org/pluggable-transports/goptlib.git
 RUN go get -d ./...

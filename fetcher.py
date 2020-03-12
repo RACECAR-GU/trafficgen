@@ -220,7 +220,15 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     logger.info( '[%s] starting display' % worker_name )
     display = Display(visible=0, size=(1024, 768))
     display.start() 
+
+    # NOTE: set this before the horrible hack below
+    transport_exec = PT_TRANSPORTS[bridge_type]
     
+    if bridge_type == 'obfs5':
+        logger.info( 'applying obfs5 hacks to fool Tor into thinking we\'re talking obfs4' )
+        bridge_type = 'obfs4'
+        bridge_line = bridge_line.replace('obfs5','obfs4')
+        
     preferences = {
         "browser.cache.memory.enable" : False,
         "browser.cache.offline.enable" : False,
@@ -249,7 +257,7 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
                 preferences[pref_string] = bridge_line
             torrc['Bridge']     = bridge_line
             torrc['UseBridges'] = '1'
-            torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,PT_TRANSPORTS[bridge_type])
+            torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
         logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
         logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
 
@@ -315,7 +323,7 @@ def read_bridges_file( filename ):
         return [],None
     else:
         with open( filename, 'r' ) as f:
-            bridge_descriptors = f.readlines()
+            bridge_descriptors = f.read().splitlines() 
             bridge_ips = []
             bridge_types = {}
             for d in bridge_descriptors:

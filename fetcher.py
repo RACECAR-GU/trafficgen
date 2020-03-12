@@ -240,7 +240,7 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
             'DataDirectory' : tor_data_dir,
             'HiddenServiceStatistics': '0',
             'DirReqStatistics' : '0',
-            'Log'           : 'notice syslog',
+            'Log'           : 'notice file %s/tor.log' % tor_data_dir,
         }
         if bridge_type is not None:
             preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
@@ -250,8 +250,8 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
             torrc['Bridge']     = bridge_line
             torrc['UseBridges'] = '1'
             torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,PT_TRANSPORTS[bridge_type])
-        logging.debug( '[%s] preferences = %s' % (worker_name, preferences) )
-        logging.debug( '[%s] torrc = %s' % (worker_name, torrc) )        
+        logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
+        logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
 
         launched_Tor = False
         while launched_Tor is False:

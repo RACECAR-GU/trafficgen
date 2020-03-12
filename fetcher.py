@@ -251,6 +251,7 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
             torrc['UseBridges'] = '1'
             torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,PT_TRANSPORTS[bridge_type])
         logging.debug( '[%s] preferences = %s' % (worker_name, preferences) )
+        logging.debug( '[%s] torrc = %s' % (worker_name, torrc) )        
 
         launched_Tor = False
         while launched_Tor is False:

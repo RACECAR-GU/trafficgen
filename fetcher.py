@@ -28,13 +28,14 @@ import signal
 import numpy
 import os
 from stem.control import Controller
+from stem.process import launch_tor_with_config
 from stem import CircStatus
 from tbselenium.tbdriver import TorBrowserDriver
 import tbselenium.common as cm
-from tbselenium.utils import launch_tbb_tor_with_stem
+from tbselenium.utils import launch_tbb_tor_with_stem, prepend_to_env_var
 from selenium.webdriver.common.utils import free_port
 import tempfile
-from os.path import join
+from os.path import join, dirname
 
 
 
@@ -265,8 +266,10 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         launched_Tor = False
         while launched_Tor is False:
             try:
-                tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
-                                                       tor_binary=tor_binary)
+                prepend_to_env_var("LD_LIBRARY_PATH", dirname(tor_binary))
+                tor_process = launch_tor_with_config(config=torrc, tor_cmd=tor_binary, timeout=300)
+                #tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
+                #                                       tor_binary=tor_binary)
                 launched_Tor = True
             except OSError as e:
                 logging.warn( '[%s] Failed to invoke Tor: %s' % (worker_name, e) )

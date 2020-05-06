@@ -222,14 +222,8 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     display = Display(visible=0, size=(1024, 768))
     display.start() 
 
-    # NOTE: set this before the horrible hack below
     if bridge_type is not None: 
         transport_exec = PT_TRANSPORTS[bridge_type]
-    
-    if bridge_type == 'obfs5':
-        logger.info( 'applying obfs5 hacks to fool Tor into thinking we\'re talking obfs4' )
-        bridge_type = 'obfs4'
-        bridge_line = bridge_line.replace('obfs5','obfs4')
         
     preferences = {
         "browser.cache.memory.enable" : False,

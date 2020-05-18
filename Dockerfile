@@ -18,12 +18,25 @@ RUN apt-get -y install x11-utils
 RUN apt-get -y install wget
 
 # install Tor Browser
+USER root
 WORKDIR /tor
 RUN chown user /tor
 USER user
 RUN wget https://www.torproject.org/dist/torbrowser/9.0.4/tor-browser-linux64-9.0.4_en-US.tar.xz
 RUN tar xvf tor-browser-linux64-9.0.4_en-US.tar.xz
+
+# install alpha version of Tor Browser (necessary for Snowflake)
+USER root
+WORKDIR /tmp/tor-alpha
+RUN chown user /tmp/tor-alpha
+USER user
+RUN wget https://www.torproject.org/dist/torbrowser/9.5a12/tor-browser-linux64-9.5a12_en-US.tar.xz
+RUN tar xvf tor-browser-linux64-9.5a12_en-US.tar.xz
+USER root
+RUN mv /tmp/tor-alpha /tor-alpha
+
 # install Tor
+WORKDIR /tor
 USER root
 RUN apt-get -y install apt-transport-https curl
 ADD tor-sources.list /etc/apt/sources.list.d/

@@ -22,8 +22,8 @@ USER root
 WORKDIR /tor
 RUN chown user /tor
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/9.0.4/tor-browser-linux64-9.0.4_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-9.0.4_en-US.tar.xz
+RUN wget https://www.torproject.org/dist/torbrowser/9.0.10/tor-browser-linux64-9.0.10_en-US.tar.xz
+RUN tar xvf tor-browser-linux64-9.0.10_en-US.tar.xz
 
 # install alpha version of Tor Browser (necessary for Snowflake)
 USER root
@@ -96,6 +96,11 @@ RUN go get -d
 RUN go build
 USER root
 RUN cp meek-client /usr/bin
+
+# copy snowflake from Tor alpha; put it somewhere we can easily find it
+USER root
+RUN cp /tor-alpha/tor-browser_en-US/Browser/TorBrowser/Tor/PluggableTransports/snowflake-client /usr/bin
+RUN chmod 755 /usr/bin/snowflake-client
 
 # finally, let's get this thing working
 USER user

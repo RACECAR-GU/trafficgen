@@ -39,11 +39,13 @@ from os.path import join
 
 
 PT_TRANSPORTS = {
-    'obfs4' : '/usr/bin/obfs4proxy',
-    'obfs5' : '/usr/bin/obfs5proxy',
-    'meek'  : '/usr/bin/meek-client',
+    'obfs4'     : '/usr/bin/obfs4proxy',
+    'obfs5'     : '/usr/bin/obfs5proxy',
+    'meek'      : '/usr/bin/meek-client',
+    'snowflake' : '/usr/bin/snowflake-client',
 }
 
+    
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -90,6 +92,12 @@ def parse_args():
         dest='torbrowser',
         default='/tor/tor-browser_en-US/',
         help='path to Tor browser (e.g., /path/to/tbb/tor-browser_en-US/)'
+        )
+    parser.add_argument(
+        '-A', '--toralpha',
+        dest='toralpha',
+        default='/tor-alpha/tor-browser_en-US/',
+        help='path to alpha Tor browser (or any version that works with snowflake)'
         )
     parser.add_argument(
         '-j', '--bridges',
@@ -221,13 +229,20 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     display = Display(visible=0, size=(1024, 768))
     display.start() 
 
+    torbrowser = args.torbrowser
+    
     # NOTE: set this before the horrible hack below
-    transport_exec = PT_TRANSPORTS[bridge_type]
+    if bridge_type is not None:
+        transport_exec = PT_TRANSPORTS[bridge_type]
     
     if bridge_type == 'obfs5':
         logger.info( 'applying obfs5 hacks to fool Tor into thinking we\'re talking obfs4' )
         bridge_type = 'obfs4'
         bridge_line = bridge_line.replace('obfs5','obfs4')
+
+    if bridge_type == 'snowflake':
+        logger.info( 'switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha )
+        torbrowser = args.toralpha
         
     preferences = {
         "browser.cache.memory.enable" : False,
@@ -240,7 +255,7 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         socks_port = free_port()
         control_port = free_port()
         tor_data_dir = tempfile.mkdtemp()
-        tor_binary = join(args.torbrowser, cm.DEFAULT_TOR_BINARY_PATH)
+        tor_binary = join(torbrowser, cm.DEFAULT_TOR_BINARY_PATH)
         logger.info("[%s] using SOCKS port: %s, Control port: %s" % (worker_name, socks_port, control_port))
         torrc = {
             'ControlPort'   : str(control_port),
@@ -252,12 +267,14 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         }
         if bridge_type is not None:
             preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
-            for i in range(1,15):
-                pref_string = 'extensions.torlauncher.default_bridge.%s.%d' % (bridge_type,i)
-                preferences[pref_string] = bridge_line
+            #for i in range(1,15):
+            #    pref_string = 'extensions.torlauncher.default_bridge.%s.%d' % (bridge_type,i)
+            #    preferences[pref_string] = bridge_line
             torrc['Bridge']     = bridge_line
             torrc['UseBridges'] = '1'
             torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
+            if bridge_type == 'snowflake':
+                torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
         logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
         logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
 
@@ -332,10 +349,11 @@ def read_bridges_file( filename ):
                     ip = m.group(1)
                     bridge_ips.append(ip)
                     # TODO: add more bridge types here
-                    if 'obfs4' in d: bridge_types[ip] = 'obfs4' 
-                    if 'obfs5' in d: bridge_types[ip] = 'obfs5'
-                    if 'meek'  in d: bridge_types[ip] = 'meek'
-                    if 'fte' in d: bridge_types[ip] = 'fte'
+                    if 'obfs4'     in d: bridge_types[ip] = 'obfs4' 
+                    if 'obfs5'     in d: bridge_types[ip] = 'obfs5'
+                    if 'meek'      in d: bridge_types[ip] = 'meek'
+                    if 'fte'       in d: bridge_types[ip] = 'fte'
+                    if 'snowflake' in d: bridge_types[ip] = 'snowflake'
                     if ip not in bridge_types: bridge_types[ip] = 'plain'
                 else:
                     logger.warn( 'could not find bridge IP address in "%s"' % d )

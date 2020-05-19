@@ -16,6 +16,6 @@ docker run -it --rm --entrypoint /bin/bash --user root fetcher
 
 * to run the thing, do something like:
 ```
-docker run --rm -v `pwd`:/code fetcher -l log.log -a 5 -t 0 -e msherr@cs.georgetown.edu -p 0 -j /dev/null
+docker run --rm -v `pwd`:/code fetcher -l log.log -a 5 -t 0 -e msherr@cs.georgetown.edu -p 1 -j /dev/null
 ```
 

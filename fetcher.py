@@ -28,13 +28,14 @@ import signal
 import numpy
 import os
 from stem.control import Controller
+from stem.process import launch_tor_with_config
 from stem import CircStatus
 from tbselenium.tbdriver import TorBrowserDriver
 import tbselenium.common as cm
-from tbselenium.utils import launch_tbb_tor_with_stem
+from tbselenium.utils import launch_tbb_tor_with_stem, prepend_to_env_var
 from selenium.webdriver.common.utils import free_port
 import tempfile
-from os.path import join
+from os.path import join, dirname
 
 
 
@@ -230,16 +231,9 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     display.start() 
 
     torbrowser = args.torbrowser
-    
-    # NOTE: set this before the horrible hack below
     if bridge_type is not None: 
         transport_exec = PT_TRANSPORTS[bridge_type]
     
-    if bridge_type == 'obfs5':
-        logger.info( 'applying obfs5 hacks to fool Tor into thinking we\'re talking obfs4' )
-        bridge_type = 'obfs4'
-        bridge_line = bridge_line.replace('obfs5','obfs4')
-
     if bridge_type == 'snowflake':
         logger.info( 'switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha )
         torbrowser = args.toralpha
@@ -281,8 +275,10 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         launched_Tor = False
         while launched_Tor is False:
             try:
-                tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
-                                                       tor_binary=tor_binary)
+                prepend_to_env_var("LD_LIBRARY_PATH", dirname(tor_binary))
+                tor_process = launch_tor_with_config(config=torrc, tor_cmd=tor_binary, timeout=300)
+                #tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
+                #                                       tor_binary=tor_binary)
                 launched_Tor = True
             except OSError as e:
                 logging.warn( '[%s] Failed to invoke Tor: %s' % (worker_name, e) )

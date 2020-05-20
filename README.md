@@ -22,7 +22,7 @@ Here are some useful command-lines:
 
 * Run just the direct (Alexa) workers (spawn 5 of them)
 ```
-docker run --rm -v `pwd`:/code fetcher -l log.log -a 5 -t 0 -e msherr@cs.georgetown.edu -p 0 -j /dev/null
+docker run --rm -v `pwd`:/code fetcher -l log.log -a 5 -t 0 -e msherr@cs.georgetown.edu -p 1 -j /dev/null
 ```
 
 * Run two Tor (w/o bridges) workers

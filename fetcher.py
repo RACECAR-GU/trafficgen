@@ -106,6 +106,11 @@ def parse_args():
         help='text file containing newline-deliminted list of bridge descriptors'
         )
     parser.add_argument(
+        '-b', '--directbridges',
+        dest='direct_bridge_descriptors',
+        help='text file containing newline-deliminted list of bridge descriptors for forming direct (non-Tor) connections'
+        )
+    parser.add_argument(
         '-d', '--delay',
         dest='maxdelay',
         type=float,
@@ -124,7 +129,7 @@ def parse_args():
         dest='snaplen',
         type=int,
         default=0,
-        help='snaplen for tcpdump (0 = use tcpdump\'s default'
+        help='snaplen for tcpdump (0 = use tcpdump\'s default)'
         )
     
     args = parser.parse_args()
@@ -222,7 +227,6 @@ worker "process" that visits sites via Tor
 if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
 """
 def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
-    global tor_processes
     logger = logging.getLogger('fetcher.py')    
     numpy.random.seed()
 
@@ -261,9 +265,6 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         }
         if bridge_type is not None:
             preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
-            #for i in range(1,15):
-            #    pref_string = 'extensions.torlauncher.default_bridge.%s.%d' % (bridge_type,i)
-            #    preferences[pref_string] = bridge_line
             torrc['Bridge']     = bridge_line
             torrc['UseBridges'] = '1'
             torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
@@ -307,7 +308,63 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         tor_process.kill()
         
     return                      # we can't actually get here
+
+
+
+"""
+worker "process" that visits sites via a bridge, but WITHOUT using Tor
+if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
+"""
+def direct_transport_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
+    # WARNING: this function is very broken and certainly doesn't work
     
+    logger = logging.getLogger('fetcher.py')    
+    numpy.random.seed()
+
+    logger.info( '[%s] starting display' % worker_name )
+    display = Display(visible=0, size=(1024, 768))
+    display.start() 
+
+    while True:
+        # TODO: set appropriate environment variables and fork off pluggable transport
+        os.environ['TOR_PT_MANAGED_TRANSPORT_VER'] = '1'
+        os.environ['TOR_PT_STATE_LOCATION'] = tempfile.mkdtemp()
+        os.environ['TOR_PT_EXIT_ON_STDIN_CLOSE'] = '0'
+        os.environ['TOR_PT_CLIENT_TRANSPORTS'] = bridge_type
+
+        proc = subprocess.Popen(
+            [PT_TRANSPORTS[bridge_type]],
+            stdin = subprocess.PIPE,
+            stdout = subprocess.PIPE,
+            stderr = stdout
+            )
+        outs, errs = proc.communicate(timeout=15)
+        
+        print( outs.read() )
+                              
+        # configure Firefox
+        profile = webdriver.FirefoxProfile()
+        profile.set_preference("browser.cache.disk.enable", False)
+        profile.set_preference("browser.cache.memory.enable", False)
+        profile.set_preference("browser.cache.offline.enable", False)
+        profile.set_preference("network.http.use-cache", False)
+        profile.set_preference("network.proxy.type", 1)
+        profile.set_preference("network.proxy.socks", "127.0.0.1")
+        profile.set_preference("network.proxy.socks_port", PORT-TODO )
+        profile.set_preference("network.proxy.socks_version", 5)
+
+        driver = webdriver.Firefox( profile )
+        wait = WebDriverWait(driver, timeout=10)
+
+        # perform the fetches
+        do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
+        
+        # we get here if the browser resets itself
+        proc.kill()
+        driver.close()
+
+    return                      # we can't actually get here
+
 
 
 def ctrl_c_handler(signum, frame):
@@ -425,7 +482,6 @@ def start_subprocess( target, name, p_type, args, old_process = None):
 def main( args ):
     global subprocesses
 
-    tor_processes = []
     signal.signal(signal.SIGINT, ctrl_c_handler)
 
     # set up logging

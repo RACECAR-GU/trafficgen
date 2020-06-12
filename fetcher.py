@@ -104,11 +104,12 @@ def parse_args():
     parser.add_argument(
         '-j', '--bridges',
         dest='bridge_descriptors',
-        help='text file containing newline-deliminted list of bridge descriptors'
+        help='text file containing newline-deliminted list of bridge descriptors',
+        default='/dev/null',
         )
     parser.add_argument(
         '-o', '--onehops',
-        dest='onehop_descriptors',
+        dest='one_hop_descriptors',
         help='json file containing list of descriptors for one-hop proxies (for pt-proxy)'
         )
     parser.add_argument(
@@ -340,41 +341,44 @@ def direct_transport_worker( args, urls, worker_name, one_hop_descriptor, time_c
 
     while True:
 
-        # spawn off pt-proxy
-        logger.info( '[%s] spawning a pt-proxy' % worker_name )
-        port = get_free_tcp_port()
-        cmd = [
-            "pt-proxy/pt-proxy.py",
-            "-l", "/dev/null",
-            "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
-            "-d", tempfile.gettempdir(),
-            "client",
-            "-B", one_hop_descriptor['address'],
-            "-i", one_hop_descriptor['info'],
-            '-p', port
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # spawn off pt-proxy
+            logger.info( '[%s] spawning a pt-proxy' % worker_name )
+            port = get_free_tcp_port()
+            cmd = [
+                "python3",
+                "pt-proxy/pt-proxy.py",
+                "-l", "/dev/null",
+                "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
+                "-d", tmpdirname,
+                "client",
+                "-B", one_hop_descriptor['address'],
+                "-i", one_hop_descriptor['info'],
+                '-p', str(port)
             ]
-        logger.debug( '[%s] launch command: %s' % (worker_name,cmd) )
-        proc = subprocess.Popen( cmd )
-        
-        # configure Firefox
-        profile = webdriver.FirefoxProfile()
-        profile.set_preference("browser.cache.disk.enable", False)
-        profile.set_preference("browser.cache.memory.enable", False)
-        profile.set_preference("browser.cache.offline.enable", False)
-        profile.set_preference("network.http.use-cache", False)
-        profile.set_preference("network.proxy.type", 1)
-        profile.set_preference("network.proxy.http", "localhost")
-        profile.set_preference("network.proxy.http_port", port )
+            logger.info( '[%s] launch command: %s' % (worker_name,cmd) )
+            proc = subprocess.Popen( cmd )
+            time.sleep( 3 )               # wait a few seconds for the proxy to start up
+            
+            # configure Firefox
+            profile = webdriver.FirefoxProfile()
+            profile.set_preference("browser.cache.disk.enable", False)
+            profile.set_preference("browser.cache.memory.enable", False)
+            profile.set_preference("browser.cache.offline.enable", False)
+            profile.set_preference("network.http.use-cache", False)
+            profile.set_preference("network.proxy.type", 1)
+            profile.set_preference("network.proxy.http", "localhost")
+            profile.set_preference("network.proxy.http_port", port )
+            
+            driver = webdriver.Firefox( profile )
+            wait = WebDriverWait(driver, timeout=10)
 
-        driver = webdriver.Firefox( profile )
-        wait = WebDriverWait(driver, timeout=10)
-
-        # perform the fetches
-        do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
+            # perform the fetches
+            do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
         
-        # we get here if the browser resets itself
-        proc.kill()
-        driver.close()
+            # we get here if the browser resets itself
+            proc.kill()
+            driver.close()
 
     return                      # we can't actually get here
 
@@ -403,7 +407,7 @@ def ctrl_c_handler(signum, frame):
 def read_bridges_file( filename ):
     logger = logging.getLogger('fetcher.py')    
     if filename is None:
-        return [],None
+        return [],None,None
     else:
         with open( filename, 'r' ) as f:
             bridge_descriptors = f.read().splitlines() 

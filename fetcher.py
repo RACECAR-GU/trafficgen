@@ -326,22 +326,8 @@ def direct_transport_worker( args, urls, worker_name, bridge_type, bridge_line, 
     display.start() 
 
     while True:
-        # TODO: set appropriate environment variables and fork off pluggable transport
-        os.environ['TOR_PT_MANAGED_TRANSPORT_VER'] = '1'
-        os.environ['TOR_PT_STATE_LOCATION'] = tempfile.mkdtemp()
-        os.environ['TOR_PT_EXIT_ON_STDIN_CLOSE'] = '0'
-        os.environ['TOR_PT_CLIENT_TRANSPORTS'] = bridge_type
-
-        proc = subprocess.Popen(
-            [PT_TRANSPORTS[bridge_type]],
-            stdin = subprocess.PIPE,
-            stdout = subprocess.PIPE,
-            stderr = stdout
-            )
-        outs, errs = proc.communicate(timeout=15)
+    
         
-        print( outs.read() )
-                              
         # configure Firefox
         profile = webdriver.FirefoxProfile()
         profile.set_preference("browser.cache.disk.enable", False)

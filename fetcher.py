@@ -310,12 +310,20 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     return                      # we can't actually get here
 
 
+""" from https://gist.github.com/gabrielfalcao/20e567e188f588b65ba2 """
+def get_free_tcp_port():
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(('', 0))
+    addr, port = tcp.getsockname()
+    tcp.close()
+    return port
+
 
 """
 worker "process" that visits sites via a bridge, but WITHOUT using Tor
 if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
 """
-def direct_transport_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
+def direct_transport_worker( args, urls, worker_name, time_check ):
     # WARNING: this function is very broken and certainly doesn't work
     
     logger = logging.getLogger('fetcher.py')    
@@ -326,7 +334,11 @@ def direct_transport_worker( args, urls, worker_name, bridge_type, bridge_line, 
     display.start() 
 
     while True:
-    
+
+        # spawn off pt-proxy
+        # TODO
+        port = get_free_tcp_port()
+        proc = subprocess.Popen( ["pt-proxy/pt-proxy.py"] )   # add arguments
         
         # configure Firefox
         profile = webdriver.FirefoxProfile()
@@ -401,7 +413,29 @@ def read_bridges_file( filename ):
             return bridge_descriptors,bridge_ips,bridge_types
 
 
+"""
+reads a json file that describes non-Tor bridges (HTTP proxies)
 
+{
+  "bridges": [
+    {
+      "type" : "obfs4",
+      "address" : "1.2.3.4:443",
+      "info" : "cert=ssH+9rP8dG2NLDN2XuFw63hIO/9MNNinLmxQDpVa+7kTOa9/m+tGWT1SmSYpQ9uTBGa6Hw;iat-mode=0"
+    },
+    {
+      "type" : "obfs4",
+      "address" : "9.8.7.6:443",
+      "info" : "cert=ssH+9rP8dG2NLDN2XuFw63hIO/9MNNinLmxQDpVa+7kTOa9/m+tGWT1SmSYpQ9uTBGa6Hw;iat-mode=0"
+    }
+  ]
+}
+"""
+def read_json_bridges_file( filename ):
+    # TODO
+    pass
+
+    
     
 """
 launches a bunch of tcpdump instances

@@ -27,6 +27,7 @@ import time
 import signal
 import numpy
 import os
+import json
 from stem.control import Controller
 from stem.process import launch_tor_with_config
 from stem import CircStatus
@@ -106,6 +107,11 @@ def parse_args():
         help='text file containing newline-deliminted list of bridge descriptors'
         )
     parser.add_argument(
+        '-o', '--onehops',
+        dest='onehop_descriptors',
+        help='json file containing list of descriptors for one-hop proxies (for pt-proxy)'
+        )
+    parser.add_argument(
         '-b', '--directbridges',
         dest='direct_bridge_descriptors',
         help='text file containing newline-deliminted list of bridge descriptors for forming direct (non-Tor) connections'
@@ -147,6 +153,7 @@ def read_alexa_list( filename ):
             url = 'http://%s' % line[1]
             urls.append(url)
     return urls
+
 
 
 """
@@ -323,9 +330,7 @@ def get_free_tcp_port():
 worker "process" that visits sites via a bridge, but WITHOUT using Tor
 if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
 """
-def direct_transport_worker( args, urls, worker_name, time_check ):
-    # WARNING: this function is very broken and certainly doesn't work
-    
+def direct_transport_worker( args, urls, worker_name, one_hop_descriptor, time_check ):
     logger = logging.getLogger('fetcher.py')    
     numpy.random.seed()
 
@@ -336,9 +341,20 @@ def direct_transport_worker( args, urls, worker_name, time_check ):
     while True:
 
         # spawn off pt-proxy
-        # TODO
+        logger.info( '[%s] spawning a pt-proxy' % worker_name )
         port = get_free_tcp_port()
-        proc = subprocess.Popen( ["pt-proxy/pt-proxy.py"] )   # add arguments
+        cmd = [
+            "pt-proxy/pt-proxy.py",
+            "-l", "/dev/null",
+            "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
+            "-d", tempfile.gettempdir(),
+            "client",
+            "-B", one_hop_descriptor['address'],
+            "-i", one_hop_descriptor['info'],
+            '-p', port
+            ]
+        logger.debug( '[%s] launch command: %s' % (worker_name,cmd) )
+        proc = subprocess.Popen( cmd )
         
         # configure Firefox
         profile = webdriver.FirefoxProfile()
@@ -347,9 +363,8 @@ def direct_transport_worker( args, urls, worker_name, time_check ):
         profile.set_preference("browser.cache.offline.enable", False)
         profile.set_preference("network.http.use-cache", False)
         profile.set_preference("network.proxy.type", 1)
-        profile.set_preference("network.proxy.socks", "127.0.0.1")
-        profile.set_preference("network.proxy.socks_port", PORT-TODO )
-        profile.set_preference("network.proxy.socks_version", 5)
+        profile.set_preference("network.proxy.http", "localhost")
+        profile.set_preference("network.proxy.http_port", port )
 
         driver = webdriver.Firefox( profile )
         wait = WebDriverWait(driver, timeout=10)
@@ -432,8 +447,13 @@ reads a json file that describes non-Tor bridges (HTTP proxies)
 }
 """
 def read_json_bridges_file( filename ):
-    # TODO
-    pass
+    logger = logging.getLogger('fetcher.py')    
+    if filename is None:
+        return []
+    logger.info( 'reading one-hop descriptors file: %s' % filename )
+    with open( filename, 'r' ) as f:
+        data = json.loads(f.read())
+    return data['bridges']
 
     
     
@@ -521,7 +541,8 @@ def main( args ):
     
     urls = read_alexa_list( args.alexafile )
     bridge_descriptors,bridge_ips,bridge_types = read_bridges_file( args.bridge_descriptors )
-
+    one_hop_descriptors = read_json_bridges_file( args.one_hop_descriptors )
+    
     # start various pcaps
     if args.do_pcaps:
         create_pcap_sniffers( bridge_ips, bridge_types, args.snaplen )
@@ -545,6 +566,15 @@ def main( args ):
                           name,
                           bridge_type,
                           (args,urls,name,bridge_type,bridge_line) )
+    # start one-hop bridge workers
+    for i in range(len(one_hop_descriptors)):
+        one_hop_descriptor = one_hop_descriptors[i]
+        name = 'OneHop-%s-%d' % (one_hop_descriptor['type'],i)
+        start_subprocess(
+            direct_transport_worker,
+            name,
+            one_hop_descriptor['type'],
+            (args,urls,name,one_hop_descriptor) )
 
     # continuously check the health of each process
     while True:

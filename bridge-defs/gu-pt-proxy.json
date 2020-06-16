@@ -4,6 +4,11 @@
       "type" : "obfs4",
       "address" : "35.206.90.25:9876",
       "info" : "cert=5LwMm3/A7yX48ZnAMSBP7cAyVboB+Id/+IEoPajJLU4qe7ocy2YVvqd85BL1H8xh/KpkHQ;iat-mode=0"
+    },
+    {
+      "type" : "obfs5",
+      "address" : "35.209.39.172:9876",
+      "info" : "cert=j36/ljXVz3rrv8uN4Svhg3lA8M3R2C9cDef9tPatKEgVHNAnEXF+zAsKZTFXX7FyQF/yWg;iat-mode=0"
     }
   ]
 }

@@ -468,6 +468,7 @@ def create_pcap_sniffers( bridge_ips, bridge_types, snaplen ):
     logger = logging.getLogger('fetcher.py')
     filename_prefix = "captures/%s-" % datetime.today().strftime('%Y%m%d-%H%M%S')
     logger.info( 'captures will have prefix "%s"' % filename_prefix )
+    logger.warn( 'built-in pcap capture does not yet support one-hop bridges' )
     
     # first, let's figure out the main filter
     main_filter = ""

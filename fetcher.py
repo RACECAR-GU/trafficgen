@@ -27,6 +27,7 @@ import time
 import signal
 import numpy
 import os
+import json
 from stem.control import Controller
 from stem.process import launch_tor_with_config
 from stem import CircStatus
@@ -103,7 +104,18 @@ def parse_args():
     parser.add_argument(
         '-j', '--bridges',
         dest='bridge_descriptors',
-        help='text file containing newline-deliminted list of bridge descriptors'
+        help='text file containing newline-deliminted list of bridge descriptors',
+        default='/dev/null',
+        )
+    parser.add_argument(
+        '-o', '--onehops',
+        dest='one_hop_descriptors',
+        help='json file containing list of descriptors for one-hop proxies (for pt-proxy)'
+        )
+    parser.add_argument(
+        '-b', '--directbridges',
+        dest='direct_bridge_descriptors',
+        help='text file containing newline-deliminted list of bridge descriptors for forming direct (non-Tor) connections'
         )
     parser.add_argument(
         '-d', '--delay',
@@ -124,7 +136,7 @@ def parse_args():
         dest='snaplen',
         type=int,
         default=0,
-        help='snaplen for tcpdump (0 = use tcpdump\'s default'
+        help='snaplen for tcpdump (0 = use tcpdump\'s default)'
         )
     
     args = parser.parse_args()
@@ -142,6 +154,7 @@ def read_alexa_list( filename ):
             url = 'http://%s' % line[1]
             urls.append(url)
     return urls
+
 
 
 """
@@ -222,7 +235,6 @@ worker "process" that visits sites via Tor
 if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
 """
 def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
-    global tor_processes
     logger = logging.getLogger('fetcher.py')    
     numpy.random.seed()
 
@@ -261,9 +273,6 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         }
         if bridge_type is not None:
             preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
-            #for i in range(1,15):
-            #    pref_string = 'extensions.torlauncher.default_bridge.%s.%d' % (bridge_type,i)
-            #    preferences[pref_string] = bridge_line
             torrc['Bridge']     = bridge_line
             torrc['UseBridges'] = '1'
             torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
@@ -307,7 +316,72 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
         tor_process.kill()
         
     return                      # we can't actually get here
-    
+
+
+""" from https://gist.github.com/gabrielfalcao/20e567e188f588b65ba2 """
+def get_free_tcp_port():
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(('', 0))
+    addr, port = tcp.getsockname()
+    tcp.close()
+    return port
+
+
+"""
+worker "process" that visits sites via a bridge, but WITHOUT using Tor
+if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
+"""
+def direct_transport_worker( args, urls, worker_name, one_hop_descriptor, time_check ):
+    logger = logging.getLogger('fetcher.py')    
+    numpy.random.seed()
+
+    logger.info( '[%s] starting display' % worker_name )
+    display = Display(visible=0, size=(1024, 768))
+    display.start() 
+
+    while True:
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # spawn off pt-proxy
+            logger.info( '[%s] spawning a pt-proxy' % worker_name )
+            port = get_free_tcp_port()
+            cmd = [
+                "python3",
+                "pt-proxy/pt-proxy.py",
+                "-l", "/dev/null",
+                "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
+                "-d", tmpdirname,
+                "client",
+                "-B", one_hop_descriptor['address'],
+                "-i", one_hop_descriptor['info'],
+                '-p', str(port)
+            ]
+            logger.info( '[%s] launch command: %s' % (worker_name,cmd) )
+            proc = subprocess.Popen( cmd )
+            time.sleep( 3 )               # wait a few seconds for the proxy to start up
+            
+            # configure Firefox
+            profile = webdriver.FirefoxProfile()
+            profile.set_preference("browser.cache.disk.enable", False)
+            profile.set_preference("browser.cache.memory.enable", False)
+            profile.set_preference("browser.cache.offline.enable", False)
+            profile.set_preference("network.http.use-cache", False)
+            profile.set_preference("network.proxy.type", 1)
+            profile.set_preference("network.proxy.http", "localhost")
+            profile.set_preference("network.proxy.http_port", port )
+            
+            driver = webdriver.Firefox( profile )
+            wait = WebDriverWait(driver, timeout=10)
+
+            # perform the fetches
+            do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
+        
+            # we get here if the browser resets itself
+            proc.kill()
+            driver.close()
+
+    return                      # we can't actually get here
+
 
 
 def ctrl_c_handler(signum, frame):
@@ -333,7 +407,7 @@ def ctrl_c_handler(signum, frame):
 def read_bridges_file( filename ):
     logger = logging.getLogger('fetcher.py')    
     if filename is None:
-        return [],None
+        return [],None,None
     else:
         with open( filename, 'r' ) as f:
             bridge_descriptors = f.read().splitlines() 
@@ -358,7 +432,34 @@ def read_bridges_file( filename ):
             return bridge_descriptors,bridge_ips,bridge_types
 
 
+"""
+reads a json file that describes non-Tor bridges (HTTP proxies)
 
+{
+  "bridges": [
+    {
+      "type" : "obfs4",
+      "address" : "1.2.3.4:443",
+      "info" : "cert=ssH+9rP8dG2NLDN2XuFw63hIO/9MNNinLmxQDpVa+7kTOa9/m+tGWT1SmSYpQ9uTBGa6Hw;iat-mode=0"
+    },
+    {
+      "type" : "obfs4",
+      "address" : "9.8.7.6:443",
+      "info" : "cert=ssH+9rP8dG2NLDN2XuFw63hIO/9MNNinLmxQDpVa+7kTOa9/m+tGWT1SmSYpQ9uTBGa6Hw;iat-mode=0"
+    }
+  ]
+}
+"""
+def read_json_bridges_file( filename ):
+    logger = logging.getLogger('fetcher.py')    
+    if filename is None:
+        return []
+    logger.info( 'reading one-hop descriptors file: %s' % filename )
+    with open( filename, 'r' ) as f:
+        data = json.loads(f.read())
+    return data['bridges']
+
+    
     
 """
 launches a bunch of tcpdump instances
@@ -367,6 +468,7 @@ def create_pcap_sniffers( bridge_ips, bridge_types, snaplen ):
     logger = logging.getLogger('fetcher.py')
     filename_prefix = "captures/%s-" % datetime.today().strftime('%Y%m%d-%H%M%S')
     logger.info( 'captures will have prefix "%s"' % filename_prefix )
+    logger.warn( 'built-in pcap capture does not yet support one-hop bridges' )
     
     # first, let's figure out the main filter
     main_filter = ""
@@ -425,7 +527,6 @@ def start_subprocess( target, name, p_type, args, old_process = None):
 def main( args ):
     global subprocesses
 
-    tor_processes = []
     signal.signal(signal.SIGINT, ctrl_c_handler)
 
     # set up logging
@@ -445,7 +546,8 @@ def main( args ):
     
     urls = read_alexa_list( args.alexafile )
     bridge_descriptors,bridge_ips,bridge_types = read_bridges_file( args.bridge_descriptors )
-
+    one_hop_descriptors = read_json_bridges_file( args.one_hop_descriptors )
+    
     # start various pcaps
     if args.do_pcaps:
         create_pcap_sniffers( bridge_ips, bridge_types, args.snaplen )
@@ -469,6 +571,15 @@ def main( args ):
                           name,
                           bridge_type,
                           (args,urls,name,bridge_type,bridge_line) )
+    # start one-hop bridge workers
+    for i in range(len(one_hop_descriptors)):
+        one_hop_descriptor = one_hop_descriptors[i]
+        name = 'OneHop-%s-%d' % (one_hop_descriptor['type'],i)
+        start_subprocess(
+            direct_transport_worker,
+            name,
+            one_hop_descriptor['type'],
+            (args,urls,name,one_hop_descriptor) )
 
     # continuously check the health of each process
     while True:

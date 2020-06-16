@@ -30,8 +30,8 @@ USER root
 WORKDIR /tmp/tor-alpha
 RUN chown user /tmp/tor-alpha
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/9.5a12/tor-browser-linux64-9.5a12_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-9.5a12_en-US.tar.xz
+RUN wget https://www.torproject.org/dist/torbrowser/10.0a1/tor-browser-linux64-10.0a1_en-US.tar.xz
+RUN tar xvf tor-browser-linux64-10.0a1_en-US.tar.xz
 USER root
 RUN mv /tmp/tor-alpha /tor-alpha
 
@@ -63,10 +63,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --assume-yes postfix
 RUN apt-get -y install psmisc git
 
 # install golang
-#RUN apt-get -y install software-properties-common
-#RUN add-apt-repository -y ppa:longsleep/golang-backports
-#RUN apt-get -y update
-#RUN apt-get -y install golang
 WORKDIR /tmp
 RUN wget https://dl.google.com/go/go1.13.linux-amd64.tar.gz
 RUN tar -xvf go1.13.linux-amd64.tar.gz
@@ -81,7 +77,6 @@ ENV GOPATH=/code/go
 ENV PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
 ADD --chown=user obfsX/ obfs5/
 WORKDIR /code/obfs5
-#RUN go get -insecure git.torproject.org/pluggable-transports/goptlib.git
 RUN go get -d ./...
 RUN go build -o obfs5proxy ./obfs4proxy
 USER root

@@ -22,16 +22,16 @@ USER root
 WORKDIR /tor
 RUN chown user /tor
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/9.0.10/tor-browser-linux64-9.0.10_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-9.0.10_en-US.tar.xz
+RUN wget https://dist.torproject.org/torbrowser/9.5.3/tor-browser-linux64-9.5.3_en-US.tar.xz
+RUN tar xvf tor-browser-linux64-9.5.3_en-US.tar.xz
 
 # install alpha version of Tor Browser (necessary for Snowflake)
 USER root
 WORKDIR /tmp/tor-alpha
 RUN chown user /tmp/tor-alpha
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/10.0a1/tor-browser-linux64-10.0a1_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-10.0a1_en-US.tar.xz
+RUN wget https://dist.torproject.org/torbrowser/10.0a4/tor-browser-linux64-10.0a4_en-US.tar.xz
+RUN tar xvf tor-browser-linux64-10.0a4_en-US.tar.xz
 USER root
 RUN mv /tmp/tor-alpha /tor-alpha
 

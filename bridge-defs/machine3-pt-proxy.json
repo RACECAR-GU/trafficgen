@@ -2,7 +2,7 @@
   "bridges": [
     {
       "type" : "obfs5",
-      "address" : "35.209.39.172:9876",
+      "address" : "35.208.127.78:9876",
       "info" : "cert=j36/ljXVz3rrv8uN4Svhg3lA8M3R2C9cDef9tPatKEgVHNAnEXF+zAsKZTFXX7FyQF/yWg;iat-mode=0"
     }
   ]

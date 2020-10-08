@@ -212,21 +212,21 @@ def direct_worker( args, urls, worker_name, time_check ):
     numpy.random.seed()
 
     logger.info( '[%s] starting display' % worker_name )
-    display = Display(visible=0, size=(1024, 768))
-    display.start() 
+    with Display(visible=0, size=(1024, 768)):
     
-    profile = webdriver.FirefoxProfile()
-    profile.set_preference("browser.cache.disk.enable", False)
-    profile.set_preference("browser.cache.memory.enable", False)
-    profile.set_preference("browser.cache.offline.enable", False)
-    profile.set_preference("network.http.use-cache", False)
-    driver = webdriver.Firefox( profile )
-    wait = WebDriverWait(driver, timeout=10)
+        profile = webdriver.FirefoxProfile()
+        profile.set_preference("browser.cache.disk.enable", False)
+        profile.set_preference("browser.cache.memory.enable", False)
+        profile.set_preference("browser.cache.offline.enable", False)
+        profile.set_preference("network.http.use-cache", False)
+        driver = webdriver.Firefox( profile )
+        wait = WebDriverWait(driver, timeout=10)
+        
+        while True:
+            do_fetches( worker_name, driver, urls, args, time_check )
 
-    do_fetches( worker_name, driver, urls, args, time_check )
-
-    # never really gets here, but this seems like good form
-    driver.close()
+        # never really gets here, but this seems like good form
+        driver.close()
 
 
 
@@ -239,82 +239,79 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
     numpy.random.seed()
 
     logger.info( '[%s] starting display' % worker_name )
-    display = Display(visible=0, size=(1024, 768))
-    display.start() 
+    with Display(visible=0, size=(1024, 768)):
 
-    torbrowser = args.torbrowser
-    if bridge_type is not None: 
-        transport_exec = PT_TRANSPORTS[bridge_type]
-    
-    if bridge_type == 'snowflake':
-        logger.info( 'switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha )
-        torbrowser = args.toralpha
+        torbrowser = args.torbrowser
+        if bridge_type is not None: 
+            transport_exec = PT_TRANSPORTS[bridge_type]
         
-    preferences = {
-        "browser.cache.memory.enable" : False,
-        "browser.cache.offline.enable" : False,
-        "network.http.use-cache" : False
-    }
-    
-    # this outer loop is necessary since the browser might reset itself
-    while True:
-        socks_port = free_port()
-        control_port = free_port()
-        tor_data_dir = tempfile.mkdtemp()
-        tor_binary = join(torbrowser, cm.DEFAULT_TOR_BINARY_PATH)
-        logger.info("[%s] using SOCKS port: %s, Control port: %s" % (worker_name, socks_port, control_port))
-        torrc = {
-            'ControlPort'   : str(control_port),
-            'SOCKSPort'     : str(socks_port),
-            'DataDirectory' : tor_data_dir,
-            'HiddenServiceStatistics': '0',
-            'DirReqStatistics' : '0',
-            'Log'           : 'notice file %s/tor.log' % tor_data_dir,
+        if bridge_type == 'snowflake':
+            logger.info( 'switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha )
+            torbrowser = args.toralpha
+            
+        preferences = {
+            "browser.cache.memory.enable" : False,
+            "browser.cache.offline.enable" : False,
+            "network.http.use-cache" : False
         }
-        if bridge_type is not None:
-            preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
-            torrc['Bridge']     = bridge_line
-            torrc['UseBridges'] = '1'
-            torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
-            if bridge_type == 'snowflake':
-                torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
-        logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
-        logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
-
-        launched_Tor = False
-        while launched_Tor is False:
-            try:
-                prepend_to_env_var("LD_LIBRARY_PATH", dirname(tor_binary))
-                tor_process = launch_tor_with_config(config=torrc, tor_cmd=tor_binary, timeout=300)
-                #tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
-                #                                       tor_binary=tor_binary)
-                launched_Tor = True
-            except OSError as e:
-                logging.warn( '[%s] Failed to invoke Tor: %s' % (worker_name, e) )
-                time.sleep( 60 ) # wait one minute and try again
-                
-    
-        with Controller.from_port(port=control_port) as controller:
-            controller.authenticate()
-            with TorBrowserDriver(
-                    args.torbrowser,
-                    default_bridge_type=bridge_type,
-                    pref_dict=preferences,
-                    socks_port=socks_port,
-                    control_port=control_port) as driver:
-                # fetch until we are told to "reboot"
-                do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
-                logger.info( '[%s] Resetting' % worker_name )
-                try:
-                    driver.close()
-                    time.sleep(4) # wait a few seconds for things to settle
-                except Exception as e:
-                    logger.warn( '%s Closing driver caused badness: %s' % (worker_name,e) )
-                
-
-        # if we get here, then we should kill the Tor process
-        tor_process.kill()
         
+        # this outer loop is necessary since the browser might reset itself
+        while True:
+            socks_port = free_port()
+            control_port = free_port()
+            tor_data_dir = tempfile.mkdtemp()
+            tor_binary = join(torbrowser, cm.DEFAULT_TOR_BINARY_PATH)
+            logger.info("[%s] using SOCKS port: %s, Control port: %s" % (worker_name, socks_port, control_port))
+            torrc = {
+                'ControlPort'   : str(control_port),
+                'SOCKSPort'     : str(socks_port),
+                'DataDirectory' : tor_data_dir,
+                'HiddenServiceStatistics': '0',
+                'DirReqStatistics' : '0',
+                'Log'           : 'notice file %s/tor.log' % tor_data_dir,
+            }
+            if bridge_type is not None:
+                preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
+                torrc['Bridge']     = bridge_line
+                torrc['UseBridges'] = '1'
+                torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
+                if bridge_type == 'snowflake':
+                    torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
+            logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
+            logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
+
+            launched_Tor = False
+            while launched_Tor is False:
+                try:
+                    prepend_to_env_var("LD_LIBRARY_PATH", dirname(tor_binary))
+                    tor_process = launch_tor_with_config(config=torrc, tor_cmd=tor_binary, timeout=300)
+                    #tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
+                    #                                       tor_binary=tor_binary)
+                    launched_Tor = True
+                except OSError as e:
+                    logging.warn( '[%s] Failed to invoke Tor: %s' % (worker_name, e) )
+                    time.sleep( 60 ) # wait one minute and try again
+
+            with Controller.from_port(port=control_port) as controller:
+                controller.authenticate()
+                with TorBrowserDriver(
+                        args.torbrowser,
+                        default_bridge_type=bridge_type,
+                        pref_dict=preferences,
+                        socks_port=socks_port,
+                        control_port=control_port) as driver:
+                    # fetch until we are told to "reboot"
+                    do_fetches(worker_name, driver, urls, args, time_check, args.resetprob )
+                    logger.info('[%s] Resetting' % worker_name)
+                    try:
+                        driver.close()
+                        time.sleep(4) # wait a few seconds for things to settle
+                    except Exception as e:
+                        logger.warn('%s Closing driver caused badness: %s' % (worker_name,e) )
+
+            # if we get here, then we should kill the Tor process
+            tor_process.kill()
+
     return                      # we can't actually get here
 
 
@@ -331,54 +328,53 @@ def get_free_tcp_port():
 worker "process" that visits sites via a bridge, but WITHOUT using Tor
 if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
 """
-def direct_transport_worker( args, urls, worker_name, one_hop_descriptor, time_check ):
-    logger = logging.getLogger('fetcher.py')    
+def direct_transport_worker(args, urls, worker_name, one_hop_descriptor, time_check ):
+    logger = logging.getLogger('fetcher.py')
     numpy.random.seed()
 
     logger.info( '[%s] starting display' % worker_name )
-    display = Display(visible=0, size=(1024, 768))
-    display.start() 
+    with Display(visible=0, size=(1024, 768)):
 
-    while True:
+        while True:
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            # spawn off pt-proxy
-            logger.info( '[%s] spawning a pt-proxy' % worker_name )
-            port = get_free_tcp_port()
-            cmd = [
-                "python3",
-                "pt-proxy/pt-proxy.py",
-                "-l", "/dev/null",
-                "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
-                "-d", tmpdirname,
-                "client",
-                "-B", one_hop_descriptor['address'],
-                "-i", one_hop_descriptor['info'],
-                '-p', str(port)
-            ]
-            logger.info( '[%s] launch command: %s' % (worker_name,cmd) )
-            proc = subprocess.Popen( cmd )
-            time.sleep( 3 )               # wait a few seconds for the proxy to start up
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                # spawn off pt-proxy
+                logger.info( '[%s] spawning a pt-proxy' % worker_name )
+                port = get_free_tcp_port()
+                cmd = [
+                    "python3",
+                    "pt-proxy/pt-proxy.py",
+                    "-l", "/dev/null",
+                    "-b", PT_TRANSPORTS[one_hop_descriptor['type']],
+                    "-d", tmpdirname,
+                    "client",
+                    "-B", one_hop_descriptor['address'],
+                    "-i", one_hop_descriptor['info'],
+                    '-p', str(port)
+                ]
+                logger.info( '[%s] launch command: %s' % (worker_name,cmd) )
+                proc = subprocess.Popen( cmd )
+                time.sleep( 3 )               # wait a few seconds for the proxy to start up
+                
+                # configure Firefox
+                profile = webdriver.FirefoxProfile()
+                profile.set_preference("browser.cache.disk.enable", False)
+                profile.set_preference("browser.cache.memory.enable", False)
+                profile.set_preference("browser.cache.offline.enable", False)
+                profile.set_preference("network.http.use-cache", False)
+                profile.set_preference("network.proxy.type", 1)
+                profile.set_preference("network.proxy.http", "localhost")
+                profile.set_preference("network.proxy.http_port", port )
+                
+                driver = webdriver.Firefox( profile )
+                wait = WebDriverWait(driver, timeout=10)
+
+                # perform the fetches
+                do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
             
-            # configure Firefox
-            profile = webdriver.FirefoxProfile()
-            profile.set_preference("browser.cache.disk.enable", False)
-            profile.set_preference("browser.cache.memory.enable", False)
-            profile.set_preference("browser.cache.offline.enable", False)
-            profile.set_preference("network.http.use-cache", False)
-            profile.set_preference("network.proxy.type", 1)
-            profile.set_preference("network.proxy.http", "localhost")
-            profile.set_preference("network.proxy.http_port", port )
-            
-            driver = webdriver.Firefox( profile )
-            wait = WebDriverWait(driver, timeout=10)
-
-            # perform the fetches
-            do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
-        
-            # we get here if the browser resets itself
-            proc.kill()
-            driver.close()
+                # we get here if the browser resets itself
+                proc.kill()
+                driver.close()
 
     return                      # we can't actually get here
 

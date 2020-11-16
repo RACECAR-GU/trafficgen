@@ -7,17 +7,13 @@ Micah Sherr <msherr@cs.georgetown.edu>
 import traceback
 import smtplib
 from email.message import EmailMessage
-from functools import partial
 from datetime import datetime
 import re
-from scapy.all import wrpcap
-from scapy.all import AsyncSniffer
 from pyvirtualdisplay import Display
 from timeit import default_timer as timer
 import multiprocessing_logging
 from multiprocessing import Process, Value
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.wait import WebDriverWait
 import argparse
 import gzip
@@ -30,24 +26,22 @@ import os
 import json
 from stem.control import Controller
 from stem.process import launch_tor_with_config
-from stem import CircStatus
 from tbselenium.tbdriver import TorBrowserDriver
 import tbselenium.common as cm
-from tbselenium.utils import launch_tbb_tor_with_stem, prepend_to_env_var
+from tbselenium.utils import prepend_to_env_var
 from selenium.webdriver.common.utils import free_port
 import tempfile
 from os.path import join, dirname
 
 
-
 PT_TRANSPORTS = {
-    'obfs4'     : '/usr/bin/obfs4proxy',
-    'obfs5'     : '/usr/bin/obfs5proxy',
-    'meek'      : '/usr/bin/meek-client',
-    'snowflake' : '/usr/bin/snowflake-client',
+    'obfs4': '/usr/bin/obfs4proxy',
+    'obfs5': '/usr/bin/obfs5proxy',
+    'meek': '/usr/bin/meek-client',
+    'snowflake': '/usr/bin/snowflake-client',
 }
 
-    
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -138,17 +132,16 @@ def parse_args():
         default=0,
         help='snaplen for tcpdump (0 = use tcpdump\'s default)'
         )
-    
+
     args = parser.parse_args()
     return args
 
 
-
-def read_alexa_list( filename ):
+def read_alexa_list(filename):
     logger = logging.getLogger('fetcher.py')
-    logger.info( 'reading alexa list from %s' % filename )
+    logger.info('reading alexa list from %s' % filename)
     urls = []
-    with gzip.open(filename,'rt') as f:
+    with gzip.open(filename, 'rt') as f:
         csvreader = csv.reader(f)
         for line in csvreader:
             url = 'http://%s' % line[1]
@@ -156,12 +149,11 @@ def read_alexa_list( filename ):
     return urls
 
 
-
-"""
-sample according to the Zipf distribution, using an arbitrarilyy 
-chosen distribution parameter.
-"""
-def sample_from_urls( urls ):
+def sample_from_urls(urls):
+    """
+    sample according to the Zipf distribution, using an arbitrarily
+    chosen distribution parameter.
+    """
     a = 1.2
     r = None
     while r is None or r > len(urls):
@@ -170,28 +162,30 @@ def sample_from_urls( urls ):
     return urls[r]
 
 
-"""
-actually perform the fetches
-"""
-def do_fetches( worker_name, driver, urls, args, time_check, reset_prob = None ):
+def do_fetches(worker_name, driver, urls, args, time_check, reset_prob=None):
+    """
+    actually perform the fetches
+    """
     logger = logging.getLogger('fetcher.py')
 
     driver.set_page_load_timeout(60)
     driver.implicitly_wait(60)
-    
+
     while True:
-        
+
         driver.delete_all_cookies()
         url = sample_from_urls(urls)
-        logger.info( '[%s] will fetch %s' % (worker_name,url) )
+        logger.info('[%s] will fetch %s' % (worker_name, url))
 
         try:
             start = timer()
             driver.get(url)
             end = timer()
-            logger.info( '[%s] fetched %s in %f seconds' % (worker_name,url,(end-start)) )
+            logger.info('[%s] fetched %s in %f seconds'
+                        % (worker_name, url, (end-start)))
         except Exception as e:
-            logger.warn( '[%s] failed to fetch %s; ==> %s' % (worker_name,url,e) )
+            logger.warn('[%s] failed to fetch %s; ==> %s'
+                        % (worker_name, url, e))
         finally:
             time_check.value = time.time()
             delay_time = numpy.random.random_sample() * args.maxdelay
@@ -199,98 +193,103 @@ def do_fetches( worker_name, driver, urls, args, time_check, reset_prob = None )
 
         if reset_prob is not None:
             if numpy.random.random() <= reset_prob:
-                logger.info( '[%s] stopping fetching' % worker_name )
+                logger.info('[%s] stopping fetching' % worker_name)
                 return
-        
 
 
-"""
-worker "process" that visits sites via Firefox
-"""
-def direct_worker( args, urls, worker_name, time_check ):
-    logger = logging.getLogger('fetcher.py')    
+def direct_worker(args, urls, worker_name, time_check):
+    """
+    worker "process" that visits sites via Firefox
+    """
+    logger = logging.getLogger('fetcher.py')
     numpy.random.seed()
 
-    logger.info( '[%s] starting display' % worker_name )
+    logger.info('[%s] starting display' % worker_name)
     with Display(visible=0, size=(1024, 768)):
-    
         profile = webdriver.FirefoxProfile()
         profile.set_preference("browser.cache.disk.enable", False)
         profile.set_preference("browser.cache.memory.enable", False)
         profile.set_preference("browser.cache.offline.enable", False)
         profile.set_preference("network.http.use-cache", False)
-        driver = webdriver.Firefox( profile )
-        wait = WebDriverWait(driver, timeout=10)
-        
-        while True:
-            do_fetches( worker_name, driver, urls, args, time_check )
+        with webdriver.Firefox(profile) as driver:
+            WebDriverWait(driver, timeout=10)
 
-        # never really gets here, but this seems like good form
-        driver.close()
+            while True:
+                do_fetches(worker_name, driver, urls, args, time_check)
 
+            # never really gets here, but this seems like good form
 
 
-"""
-worker "process" that visits sites via Tor
-if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
-"""
-def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
-    logger = logging.getLogger('fetcher.py')    
+def tor_worker(args, urls, worker_name, bridge_type, bridge_line, time_check):
+    """
+    worker "process" that visits sites via Tor
+    if specified, bridge_line uses a bridge
+    (it should exclude the "Bridge" prefix)
+    """
+    logger = logging.getLogger('fetcher.py')
     numpy.random.seed()
 
-    logger.info( '[%s] starting display' % worker_name )
+    logger.info('[%s] starting display' % worker_name)
     with Display(visible=0, size=(1024, 768)):
 
         torbrowser = args.torbrowser
-        if bridge_type is not None: 
+        if bridge_type is not None:
             transport_exec = PT_TRANSPORTS[bridge_type]
-        
+
         if bridge_type == 'snowflake':
-            logger.info( 'switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha )
+            logger.info('switching to tor-alpha (%s) for this instance, to support snowflake' % args.toralpha)
             torbrowser = args.toralpha
-            
+
         preferences = {
-            "browser.cache.memory.enable" : False,
-            "browser.cache.offline.enable" : False,
-            "network.http.use-cache" : False
+            "browser.cache.memory.enable": False,
+            "browser.cache.offline.enable": False,
+            "network.http.use-cache": False
         }
-        
+
         # this outer loop is necessary since the browser might reset itself
         while True:
             socks_port = free_port()
             control_port = free_port()
             tor_data_dir = tempfile.mkdtemp()
             tor_binary = join(torbrowser, cm.DEFAULT_TOR_BINARY_PATH)
-            logger.info("[%s] using SOCKS port: %s, Control port: %s" % (worker_name, socks_port, control_port))
+            logger.info("[%s] using SOCKS port: %s, Control port: %s"
+                        % (worker_name, socks_port, control_port))
             torrc = {
-                'ControlPort'   : str(control_port),
-                'SOCKSPort'     : str(socks_port),
-                'DataDirectory' : tor_data_dir,
+                'ControlPort': str(control_port),
+                'SOCKSPort': str(socks_port),
+                'DataDirectory': tor_data_dir,
                 'HiddenServiceStatistics': '0',
-                'DirReqStatistics' : '0',
-                'Log'           : 'notice file %s/tor.log' % tor_data_dir,
+                'DirReqStatistics': '0',
+                'Log': 'notice file %s/tor.log' % tor_data_dir,
             }
             if bridge_type is not None:
-                preferences['extensions.torlauncher.default_bridge_type'] = bridge_type
-                torrc['Bridge']     = bridge_line
+                preferences['extensions.torlauncher.default_bridge_type'] \
+                    = bridge_type
+                torrc['Bridge'] = bridge_line
                 torrc['UseBridges'] = '1'
-                torrc['ClientTransportPlugin'] = '%s exec %s' % (bridge_type,transport_exec)
+                torrc['ClientTransportPlugin'] = '%s exec %s' \
+                                                 % (bridge_type,
+                                                    transport_exec)
                 if bridge_type == 'snowflake':
                     torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
-            logging.info( '[%s] preferences = %s' % (worker_name, preferences) )
-            logging.info( '[%s] torrc = %s' % (worker_name, torrc) )        
+            logging.info('[%s] preferences = %s' % (worker_name, preferences))
+            logging.info('[%s] torrc = %s' % (worker_name, torrc))
 
             launched_Tor = False
             while launched_Tor is False:
                 try:
                     prepend_to_env_var("LD_LIBRARY_PATH", dirname(tor_binary))
-                    tor_process = launch_tor_with_config(config=torrc, tor_cmd=tor_binary, timeout=300)
-                    #tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
+                    tor_process = launch_tor_with_config(
+                                    config=torrc,
+                                    tor_cmd=tor_binary,
+                                    timeout=300)
+                    # tor_process = launch_tbb_tor_with_stem(tbb_path=args.torbrowser, torrc=torrc,
                     #                                       tor_binary=tor_binary)
                     launched_Tor = True
                 except OSError as e:
-                    logging.warn( '[%s] Failed to invoke Tor: %s' % (worker_name, e) )
-                    time.sleep( 60 ) # wait one minute and try again
+                    logging.warn('[%s] Failed to invoke Tor: %s'
+                                 % (worker_name, e))
+                    time.sleep(60)  # wait one minute and try again
 
             with Controller.from_port(port=control_port) as controller:
                 controller.authenticate()
@@ -301,45 +300,45 @@ def tor_worker( args, urls, worker_name, bridge_type, bridge_line, time_check ):
                         socks_port=socks_port,
                         control_port=control_port) as driver:
                     # fetch until we are told to "reboot"
-                    do_fetches(worker_name, driver, urls, args, time_check, args.resetprob )
+                    do_fetches(worker_name, driver, urls, args, time_check,
+                               args.resetprob)
                     logger.info('[%s] Resetting' % worker_name)
-                    try:
-                        driver.close()
-                        time.sleep(4) # wait a few seconds for things to settle
-                    except Exception as e:
-                        logger.warn('%s Closing driver caused badness: %s' % (worker_name,e) )
-
+            time.sleep(4)  # wait a few seconds for things to settle
+            # XXX: Micah used to catch an error here when the driver closed
+            # except Exception as e:
+            #     logger.warn('%s Closing driver caused badness: %s' % (worker_name, e))
             # if we get here, then we should kill the Tor process
             tor_process.kill()
 
     return                      # we can't actually get here
 
 
-""" from https://gist.github.com/gabrielfalcao/20e567e188f588b65ba2 """
 def get_free_tcp_port():
-    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp.bind(('', 0))
-    addr, port = tcp.getsockname()
-    tcp.close()
+    """ from https://gist.github.com/gabrielfalcao/20e567e188f588b65ba2 """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
+        tcp.bind(('', 0))
+        addr, port = tcp.getsockname()
     return port
 
 
-"""
-worker "process" that visits sites via a bridge, but WITHOUT using Tor
-if specified, bridge_line uses a bridge (it should exclude the "Bridge" prefix)
-"""
-def direct_transport_worker(args, urls, worker_name, one_hop_descriptor, time_check ):
+def direct_transport_worker(args, urls, worker_name, one_hop_descriptor,
+                            time_check):
+    """
+    worker "process" that visits sites via a bridge, but WITHOUT using Tor
+    if specified, bridge_line uses a bridge
+    (it should exclude the "Bridge" prefix)
+    """
     logger = logging.getLogger('fetcher.py')
     numpy.random.seed()
 
-    logger.info( '[%s] starting display' % worker_name )
+    logger.info('[%s] starting display' % worker_name)
     with Display(visible=0, size=(1024, 768)):
 
         while True:
 
             with tempfile.TemporaryDirectory() as tmpdirname:
                 # spawn off pt-proxy
-                logger.info( '[%s] spawning a pt-proxy' % worker_name )
+                logger.info('[%s] spawning a pt-proxy' % worker_name)
                 port = get_free_tcp_port()
                 cmd = [
                     "python3",
@@ -352,10 +351,10 @@ def direct_transport_worker(args, urls, worker_name, one_hop_descriptor, time_ch
                     "-i", one_hop_descriptor['info'],
                     '-p', str(port)
                 ]
-                logger.info( '[%s] launch command: %s' % (worker_name,cmd) )
-                proc = subprocess.Popen( cmd )
-                time.sleep( 3 )               # wait a few seconds for the proxy to start up
-                
+                logger.info('[%s] launch command: %s' % (worker_name, cmd))
+                proc = subprocess.Popen(cmd)
+                time.sleep(3)  # wait a few seconds for the proxy to start up
+
                 # configure Firefox
                 profile = webdriver.FirefoxProfile()
                 profile.set_preference("browser.cache.disk.enable", False)
@@ -364,49 +363,47 @@ def direct_transport_worker(args, urls, worker_name, one_hop_descriptor, time_ch
                 profile.set_preference("network.http.use-cache", False)
                 profile.set_preference("network.proxy.type", 1)
                 profile.set_preference("network.proxy.http", "localhost")
-                profile.set_preference("network.proxy.http_port", port )
-                
-                driver = webdriver.Firefox( profile )
-                wait = WebDriverWait(driver, timeout=10)
+                profile.set_preference("network.proxy.http_port", port)
 
-                # perform the fetches
-                do_fetches( worker_name, driver, urls, args, time_check, args.resetprob )
-            
-                # we get here if the browser resets itself
-                proc.kill()
-                driver.close()
+                with webdriver.Firefox(profile) as driver:
+                    WebDriverWait(driver, timeout=10)
+
+                    # perform the fetches
+                    do_fetches(worker_name, driver, urls, args, time_check,
+                               args.resetprob)
+
+                    # we get here if the browser resets itself
+                    proc.kill()
 
     return                      # we can't actually get here
-
 
 
 def ctrl_c_handler(signum, frame):
     global subprocesses
 
     logger = logging.getLogger('fetcher.py')
-    logger.info( 'SIGINT received.  Shutting down' )
-    os.system( "killall -q tcpdump" ) # TODO: admittedly, this is dumb
+    logger.info('SIGINT received.  Shutting down')
+    os.system("killall -q tcpdump")  # TODO: admittedly, this is dumb
     for p in subprocesses:
         try:
             p.terminate()
             time.sleep(1)
             p.kill()
-            logger.info( 'Killed subprocess' )
+            logger.info('Killed subprocess')
         except Exception as e:
-            logger.warn( e )
-    logging.info( 'waiting for things to stop' )
+            logger.warn(e)
+    logging.info('waiting for things to stop')
     time.sleep(5)
     exit(0)
 
 
-    
-def read_bridges_file( filename ):
-    logger = logging.getLogger('fetcher.py')    
+def read_bridges_file(filename):
+    logger = logging.getLogger('fetcher.py')
     if filename is None:
-        return [],None,None
+        return [], None, None
     else:
-        with open( filename, 'r' ) as f:
-            bridge_descriptors = f.read().splitlines() 
+        with open(filename, 'r') as f:
+            bridge_descriptors = f.read().splitlines()
             bridge_ips = []
             bridge_types = {}
             for d in bridge_descriptors:
@@ -415,17 +412,23 @@ def read_bridges_file( filename ):
                     ip = m.group(1)
                     bridge_ips.append(ip)
                     # TODO: add more bridge types here
-                    if 'obfs4'     in d: bridge_types[ip] = 'obfs4' 
-                    if 'obfs5'     in d: bridge_types[ip] = 'obfs5'
-                    if 'meek'      in d: bridge_types[ip] = 'meek'
-                    if 'fte'       in d: bridge_types[ip] = 'fte'
-                    if 'snowflake' in d: bridge_types[ip] = 'snowflake'
-                    if ip not in bridge_types: bridge_types[ip] = 'plain'
+                    if 'obfs4' in d:
+                        bridge_types[ip] = 'obfs4'
+                    if 'obfs5' in d:
+                        bridge_types[ip] = 'obfs5'
+                    if 'meek' in d:
+                        bridge_types[ip] = 'meek'
+                    if 'fte' in d:
+                        bridge_types[ip] = 'fte'
+                    if 'snowflake' in d:
+                        bridge_types[ip] = 'snowflake'
+                    if ip not in bridge_types:
+                        bridge_types[ip] = 'plain'
                 else:
-                    logger.warn( 'could not find bridge IP address in "%s"' % d )
-            logger.info( 'read bridges: %s' % bridge_descriptors )
-            logger.info( 'bridge IPs: %s' % bridge_ips )            
-            return bridge_descriptors,bridge_ips,bridge_types
+                    logger.warn('could not find bridge IP address in "%s"' % d)
+            logger.info('read bridges: %s' % bridge_descriptors)
+            logger.info('bridge IPs: %s' % bridge_ips)
+            return bridge_descriptors, bridge_ips, bridge_types
 
 
 """
@@ -446,26 +449,26 @@ reads a json file that describes non-Tor bridges (HTTP proxies)
   ]
 }
 """
-def read_json_bridges_file( filename ):
-    logger = logging.getLogger('fetcher.py')    
+def read_json_bridges_file(filename):
+    logger = logging.getLogger('fetcher.py')
     if filename is None:
         return []
-    logger.info( 'reading one-hop descriptors file: %s' % filename )
-    with open( filename, 'r' ) as f:
+    logger.info('reading one-hop descriptors file: %s' % filename)
+    with open(filename, 'r') as f:
         data = json.loads(f.read())
     return data['bridges']
 
-    
-    
-"""
-launches a bunch of tcpdump instances
-"""
-def create_pcap_sniffers( bridge_ips, bridge_types, snaplen ):
+
+def create_pcap_sniffers(bridge_ips, bridge_types, snaplen):
+    """
+    launches a bunch of tcpdump instances
+    """
     logger = logging.getLogger('fetcher.py')
-    filename_prefix = "captures/%s-" % datetime.today().strftime('%Y%m%d-%H%M%S')
-    logger.info( 'captures will have prefix "%s"' % filename_prefix )
-    logger.warn( 'built-in pcap capture does not yet support one-hop bridges' )
-    
+    filename_prefix = "captures/%s-" \
+                      % datetime.today().strftime('%Y%m%d-%H%M%S')
+    logger.info('captures will have prefix "%s"' % filename_prefix)
+    logger.warn('built-in pcap capture does not yet support one-hop bridges')
+
     # first, let's figure out the main filter
     main_filter = ""
     for bridge in bridge_ips:
@@ -474,25 +477,26 @@ def create_pcap_sniffers( bridge_ips, bridge_types, snaplen ):
         else:
             main_filter += " and not host %s" % bridge
     filename_main = "%s-nonbridge.pcap" % filename_prefix
-    logger.info( 'main pcap filter: "%s"' % main_filter )
-    os.system( "tcpdump -s %d -n -w %s %s &" % (snaplen,filename_main,main_filter) )
+    logger.info('main pcap filter: "%s"' % main_filter)
+    os.system("tcpdump -s %d -n -w %s %s &"
+              % (snaplen, filename_main, main_filter))
 
     # next, create a separate pcap for each bridge
-    counter = 0
     for bridge in bridge_ips:
         bridge_filter = "host %s" % bridge
-        filename = "%s-bridge_%s@%s.pcap" % (filename_prefix,bridge_types[bridge],bridge)
-        os.system( "tcpdump -s %d -n -w %s %s &" % (snaplen,filename,bridge_filter) )        
+        filename = "%s-bridge_%s@%s.pcap" \
+                   % (filename_prefix, bridge_types[bridge], bridge)
+        os.system("tcpdump -s %d -n -w %s %s &"
+                  % (snaplen, filename, bridge_filter))
 
 
-
-"""
-starts (or restarts) a process and updates the subprocesses datastructure
-if old_process isn't None, then it uses the values saved there and restarts it
-"""
-def start_subprocess( target, name, p_type, args, old_process = None):
+def start_subprocess(target, name, p_type, args, old_process=None):
+    """
+    starts (or restarts) a process and updates the subprocesses datastructure
+    if old_process isn't None, then it uses the values saved there and restarts
+    """
     global subprocesses
-    
+
     if old_process is not None:
         target = subprocesses[old_process]['target']
         name = subprocesses[old_process]['name']
@@ -506,21 +510,20 @@ def start_subprocess( target, name, p_type, args, old_process = None):
         except Exception:
             pass
     args_without_timecheck = args
-    time_check = Value('d',time.time())        
+    time_check = Value('d', time.time())
     args = args + (time_check,)
     p = Process(target=target, name=name, args=args)
     subprocesses[p] = {
-        'target' : target,
-        'args' : args_without_timecheck,
-        'name' : name,
-        'type' : p_type,
-        'last-check' : time_check
+        'target': target,
+        'args': args_without_timecheck,
+        'name': name,
+        'type': p_type,
+        'last-check': time_check
     }
     p.start()
 
-    
-        
-def main( args ):
+
+def main(args):
     global subprocesses
 
     signal.signal(signal.SIGINT, ctrl_c_handler)
@@ -538,44 +541,46 @@ def main( args ):
     logger = logging.getLogger('fetcher.py')
     logging.Formatter.converter = time.gmtime   # use GMT
 
-    logger.info( "running with arguments: %s" % args )
-    
-    urls = read_alexa_list( args.alexafile )
-    bridge_descriptors,bridge_ips,bridge_types = read_bridges_file( args.bridge_descriptors )
-    one_hop_descriptors = read_json_bridges_file( args.one_hop_descriptors )
-    
+    logger.info("running with arguments: %s" % args)
+
+    urls = read_alexa_list(args.alexafile)
+    bridge_descriptors, bridge_ips, bridge_types \
+        = read_bridges_file(args.bridge_descriptors)
+    one_hop_descriptors = read_json_bridges_file(args.one_hop_descriptors)
+
     # start various pcaps
     if args.do_pcaps:
-        create_pcap_sniffers( bridge_ips, bridge_types, args.snaplen )
+        create_pcap_sniffers(bridge_ips, bridge_types, args.snaplen)
 
     subprocesses = {}
-    
+
     # start vanilla (non-Tor) fetchers
     for i in range(args.alexaworkers):
         name = 'Direct-%d' % i
-        start_subprocess( direct_worker, name, 'direct', (args,urls,name) )
+        start_subprocess(direct_worker, name, 'direct', (args, urls, name))
     # start Tor (non-bridge) fetchers
     for i in range(args.torworkers):
         name = 'Tor-%d' % i
-        start_subprocess( tor_worker, name, 'tor', (args,urls,name,None,None) )
+        start_subprocess(tor_worker, name, 'tor',
+                         (args, urls, name, None, None))
     # start bridge workers
     for i in range(len(bridge_ips)):
         bridge_type = bridge_types[bridge_ips[i]]
         bridge_line = bridge_descriptors[i]
-        name = 'Bridge-%s-%s' % (bridge_type,i)
-        start_subprocess( tor_worker, 
-                          name,
-                          bridge_type,
-                          (args,urls,name,bridge_type,bridge_line) )
+        name = 'Bridge-%s-%s' % (bridge_type, i)
+        start_subprocess(tor_worker,
+                         name,
+                         bridge_type,
+                         (args, urls, name, bridge_type, bridge_line))
     # start one-hop bridge workers
     for i in range(len(one_hop_descriptors)):
         one_hop_descriptor = one_hop_descriptors[i]
-        name = 'OneHop-%s-%d' % (one_hop_descriptor['type'],i)
+        name = 'OneHop-%s-%d' % (one_hop_descriptor['type'], i)
         start_subprocess(
             direct_transport_worker,
             name,
             one_hop_descriptor['type'],
-            (args,urls,name,one_hop_descriptor) )
+            (args, urls, name, one_hop_descriptor))
 
     # continuously check the health of each process
     while True:
@@ -583,35 +588,33 @@ def main( args ):
             p_data = subprocesses[p]
             # first, check whether it's alive
             if p.is_alive():
-                logger.info( 'process %s is alive' % p.name )
+                logger.info('process %s is alive' % p.name)
             else:
-                logger.warn( 'process %s is NOT alive; restarting it' % p.name )
+                logger.warn('process %s is NOT alive; restarting it' % p.name)
                 # restart it
-                start_subprocess( None, None, None, None, p )
+                start_subprocess(None, None, None, None, p)
 
             # second, check whether it needs to be updated
             now = time.time()
             then = p_data['last-check'].value
-            if now - then > 100: # TODO: increase this at some point
-                logger.warn( 'process %s seems to have stalled; restarting it' % p.name )
-                start_subprocess( None, None, None, None, p )
+            if now - then > 100:  # TODO: increase this at some point
+                logger.warn('process %s seems to have stalled; restarting it'
+                            % p.name)
+                start_subprocess(None, None, None, None, p)
 
         time.sleep(5)
 
 
-
-
-    
-if __name__== "__main__":
+if __name__ == "__main__":
     args = parse_args()
-    
+
     try:
-        main( args )
+        main(args)
     except Exception as e:
         tb = traceback.format_exc()
-        print( "Something very bad happened:\n%s\n\n%s" % (e,tb) )
+        print("Something very bad happened:\n%s\n\n%s" % (e, tb))
         msg = EmailMessage()
-        msg.set_content("fetcher.py crashed.  oh no!\n\nIt ran with arguments %s.\n\nHere's what happened:\n%s\n\n\n%s" % (args, e,tb) )
+        msg.set_content("fetcher.py crashed.  oh no!\n\nIt ran with arguments %s.\n\nHere's what happened:\n%s\n\n\n%s" % (args, e,tb))
         msg['Subject'] = '[fetcher.py] crash report'
         msg['From'] = 'fetcher'
         msg['To'] = args.email

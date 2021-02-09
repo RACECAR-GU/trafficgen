@@ -30,9 +30,9 @@ docker run --rm -v `pwd`:/code fetcher -l log.log -a 5 -t 0 -e msherr@cs.georget
 docker run --rm -v `pwd`:/code fetcher -l log.log -a 0 -t 2 -e msherr@cs.georgetown.edu -p 0 -j /dev/null
 ```
 
-* Run a worker for every bridge defined in the file bridges/gu-obfs5.txt
+* Run a worker for every bridge defined in the file bridge-def/gu-obfs5.txt
 ```
-docker run --rm -v `pwd`:/code fetcher -l log.log -a 0 -t 0 -e msherr@cs.georgetown.edu -p 0 -j bridges/gu-obfs5.txt
+docker run --rm -v `pwd`:/code fetcher -l log.log -a 0 -t 0 -e msherr@cs.georgetown.edu -p 0 -j bridge-def/gu-obfs5.txt
 ```
 
 

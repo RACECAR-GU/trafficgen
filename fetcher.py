@@ -386,14 +386,8 @@ def ctrl_c_handler(signum, frame):
     logger = logging.getLogger('fetcher.py')
     logger.info('SIGINT received.  Shutting down')
     os.system("killall -q tcpdump")  # TODO: admittedly, this is dumb
-    for p in subprocesses:
-        try:
-            p.terminate()
-            time.sleep(1)
-            p.kill()
-            logger.info('Killed subprocess')
-        except Exception as e:
-            logger.warn(e)
+    for p in list(subprocesses):
+        end_process(p)
     logging.info('waiting for things to stop')
     time.sleep(5)
     exit(0)
@@ -492,13 +486,23 @@ def create_pcap_sniffers(bridge_ips, bridge_types, snaplen):
                   % (snaplen, filename, bridge_filter))
 
 
+def end_process(p):
+    logger = logging.getLogger('fetcher.py')
+    try:                    # kill it!
+        p.terminate()
+        p.join(5)
+        if p.exitcode is None:
+            p.kill()
+    except Exception as e:
+        logger.warn(e)
+
+
 def start_subprocess(target, name, p_type, args, old_process=None):
     """
     starts (or restarts) a process and updates the subprocesses datastructure
     if old_process isn't None, then it uses the values saved there and restarts
     """
     global subprocesses
-    logger = logging.getLogger('fetcher.py')
 
     if old_process is not None:
         target = subprocesses[old_process]['target']
@@ -506,12 +510,7 @@ def start_subprocess(target, name, p_type, args, old_process=None):
         p_type = subprocesses[old_process]['type']
         args = subprocesses[old_process]['args']
         del subprocesses[old_process]
-        try:                    # kill it!
-            old_process.terminate()
-            time.sleep(1)
-            old_process.kill()
-        except Exception as e:
-            logger.warn(e)
+        end_process(old_process)
     args_without_timecheck = args
     time_check = Value('d', time.time())
     args = args + (time_check,)
@@ -587,7 +586,7 @@ def main(args):
 
     # continuously check the health of each process
     while True:
-        for p in subprocesses:
+        for p in list(subprocesses):
             p_data = subprocesses[p]
             # first, check whether it's alive
             if p.is_alive():

@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 MAINTAINER Micah Sherr <msherr@cs.georgetown.edu>
 
 WORKDIR /code
@@ -56,7 +56,7 @@ RUN gzip top-1m.csv
 # set up some permissions for pcap
 USER root
 RUN apt-get -y install tcpdump libcap2-bin
-RUN setcap cap_net_raw=eip /usr/bin/python3.6
+RUN setcap cap_net_raw=eip /usr/bin/python3.8
 RUN setcap cap_net_raw=eip /usr/sbin/tcpdump
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --assume-yes postfix

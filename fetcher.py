@@ -32,6 +32,8 @@ from tbselenium.utils import prepend_to_env_var
 from selenium.webdriver.common.utils import free_port
 import tempfile
 from os.path import join, dirname
+import socket
+import subprocess
 
 
 PT_TRANSPORTS = {
@@ -401,34 +403,34 @@ def read_bridges_file(filename):
     logger = logging.getLogger('fetcher.py')
     if filename is None:
         return [], None, None
-    else:
-        with open(filename, 'r') as f:
-            bridge_descriptors = f.read().splitlines()
-            bridge_ips = []
-            bridge_types = {}
-            for d in bridge_descriptors:
-                m = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+", d)
-                if m:
-                    ip = m.group(1)
-                    bridge_ips.append(ip)
-                    # TODO: add more bridge types here
-                    if 'obfs4' in d:
-                        bridge_types[ip] = 'obfs4'
-                    if 'obfs5' in d:
-                        bridge_types[ip] = 'obfs5'
-                    if 'meek' in d:
-                        bridge_types[ip] = 'meek'
-                    if 'fte' in d:
-                        bridge_types[ip] = 'fte'
-                    if 'snowflake' in d:
-                        bridge_types[ip] = 'snowflake'
-                    if ip not in bridge_types:
-                        bridge_types[ip] = 'plain'
-                else:
-                    logger.warn('could not find bridge IP address in "%s"' % d)
-            logger.info('read bridges: %s' % bridge_descriptors)
-            logger.info('bridge IPs: %s' % bridge_ips)
-            return bridge_descriptors, bridge_ips, bridge_types
+
+    with open(filename, 'r') as f:
+        bridge_descriptors = f.read().splitlines()
+        bridge_ips = []
+        bridge_types = {}
+        for d in bridge_descriptors:
+            m = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+", d)
+            if m:
+                ip = m.group(1)
+                bridge_ips.append(ip)
+                # TODO: add more bridge types here
+                if 'obfs4' in d:
+                    bridge_types[ip] = 'obfs4'
+                if 'obfs5' in d:
+                    bridge_types[ip] = 'obfs5'
+                if 'meek' in d:
+                    bridge_types[ip] = 'meek'
+                if 'fte' in d:
+                    bridge_types[ip] = 'fte'
+                if 'snowflake' in d:
+                    bridge_types[ip] = 'snowflake'
+                if ip not in bridge_types:
+                    bridge_types[ip] = 'plain'
+            else:
+                logger.warn('could not find bridge IP address in "%s"' % d)
+        logger.info('read bridges: %s' % bridge_descriptors)
+        logger.info('bridge IPs: %s' % bridge_ips)
+        return bridge_descriptors, bridge_ips, bridge_types
 
 
 """
@@ -496,6 +498,7 @@ def start_subprocess(target, name, p_type, args, old_process=None):
     if old_process isn't None, then it uses the values saved there and restarts
     """
     global subprocesses
+    logger = logging.getLogger('fetcher.py')
 
     if old_process is not None:
         target = subprocesses[old_process]['target']
@@ -504,11 +507,11 @@ def start_subprocess(target, name, p_type, args, old_process=None):
         args = subprocesses[old_process]['args']
         del subprocesses[old_process]
         try:                    # kill it!
-            p.terminate()
+            old_process.terminate()
             time.sleep(1)
-            p.kill()
-        except Exception:
-            pass
+            old_process.kill()
+        except Exception as e:
+            logger.warn(e)
     args_without_timecheck = args
     time_check = Value('d', time.time())
     args = args + (time_check,)
@@ -597,7 +600,7 @@ def main(args):
             # second, check whether it needs to be updated
             now = time.time()
             then = p_data['last-check'].value
-            if now - then > 100:  # TODO: increase this at some point
+            if now - then > 400:  # TODO: increase this at some point
                 logger.warn('process %s seems to have stalled; restarting it'
                             % p.name)
                 start_subprocess(None, None, None, None, p)

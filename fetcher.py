@@ -34,6 +34,7 @@ import tempfile
 from os.path import join, dirname
 import socket
 import subprocess
+from stem.util.log import get_logger
 
 
 PT_TRANSPORTS = {
@@ -610,6 +611,9 @@ def main(args):
 
 if __name__ == "__main__":
     args = parse_args()
+    # to suppress peek of closed file error messages (also other stem error messages)
+    stemlogger = get_logger()
+    stemlogger.proagate = False
 
     try:
         main(args)

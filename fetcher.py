@@ -187,8 +187,8 @@ def do_fetches(worker_name, driver, urls, args, time_check, reset_prob=None):
             logger.info('[%s] fetched %s in %f seconds'
                         % (worker_name, url, (end-start)))
         except Exception as e:
-            logger.warn('[%s] failed to fetch %s; ==> %s'
-                        % (worker_name, url, e))
+            logger.warning('[%s] failed to fetch %s; ==> %s'
+                           % (worker_name, url, e))
         finally:
             time_check.value = time.time()
             delay_time = numpy.random.random_sample() * args.maxdelay
@@ -290,8 +290,8 @@ def tor_worker(args, urls, worker_name, bridge_type, bridge_line, time_check):
                     #                                       tor_binary=tor_binary)
                     launched_Tor = True
                 except OSError as e:
-                    logging.warn('[%s] Failed to invoke Tor: %s'
-                                 % (worker_name, e))
+                    logging.warning('[%s] Failed to invoke Tor: %s'
+                                    % (worker_name, e))
                     time.sleep(60)  # wait one minute and try again
 
             with Controller.from_port(port=control_port) as controller:
@@ -309,7 +309,7 @@ def tor_worker(args, urls, worker_name, bridge_type, bridge_line, time_check):
             time.sleep(4)  # wait a few seconds for things to settle
             # XXX: Micah used to catch an error here when the driver closed
             # except Exception as e:
-            #     logger.warn('%s Closing driver caused badness: %s' % (worker_name, e))
+            #     logger.warning('%s Closing driver caused badness: %s' % (worker_name, e))
             # if we get here, then we should kill the Tor process
             tor_process.kill()
 
@@ -422,7 +422,7 @@ def read_bridges_file(filename):
                 if ip not in bridge_types:
                     bridge_types[ip] = 'plain'
             else:
-                logger.warn('could not find bridge IP address in "%s"' % d)
+                logger.warning('could not find bridge IP address in "%s"' % d)
         logger.info('read bridges: %s' % bridge_descriptors)
         logger.info('bridge IPs: %s' % bridge_ips)
         return bridge_descriptors, bridge_ips, bridge_types
@@ -464,7 +464,7 @@ def create_pcap_sniffers(bridge_ips, bridge_types, snaplen):
     filename_prefix = "captures/%s-" \
                       % datetime.today().strftime('%Y%m%d-%H%M%S')
     logger.info('captures will have prefix "%s"' % filename_prefix)
-    logger.warn('built-in pcap capture does not yet support one-hop bridges')
+    logger.warning('built-in pcap capture does not yet support one-hop bridges')
 
     # first, let's figure out the main filter
     main_filter = ""
@@ -495,7 +495,7 @@ def end_process(p):
         if p.exitcode is None:
             p.kill()
     except Exception as e:
-        logger.warn(e)
+        logger.warning(e)
 
 
 def start_subprocess(target, name, p_type, args, old_process=None):
@@ -593,7 +593,7 @@ def main(args):
             if p.is_alive():
                 logger.info('process %s is alive' % p.name)
             else:
-                logger.warn('process %s is NOT alive; restarting it' % p.name)
+                logger.warning('process %s is NOT alive; restarting it' % p.name)
                 # restart it
                 start_subprocess(None, None, None, None, p)
 
@@ -601,8 +601,8 @@ def main(args):
             now = time.time()
             then = p_data['last-check'].value
             if now - then > 400:  # TODO: increase this at some point
-                logger.warn('process %s seems to have stalled; restarting it'
-                            % p.name)
+                logger.warning('process %s seems to have stalled; restarting it'
+                               % p.name)
                 start_subprocess(None, None, None, None, p)
 
         time.sleep(5)

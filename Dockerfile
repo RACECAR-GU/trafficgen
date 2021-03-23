@@ -97,6 +97,9 @@ USER root
 RUN cp /tor-alpha/tor-browser_en-US/Browser/TorBrowser/Tor/PluggableTransports/snowflake-client /usr/bin
 RUN chmod 755 /usr/bin/snowflake-client
 
+# add user to default Ubuntu users group (100)
+RUN usermod -a -G 100 user
+
 # finally, let's get this thing working
 USER user
 WORKDIR /code

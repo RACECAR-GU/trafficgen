@@ -11,6 +11,10 @@ Next, build the docker image via:
 docker build -t fetcher .
 ```
 
+## Important Notes
+
+For the examples below, things won't break if you make the current directory (where trafficgen resides) have group GID 100 ("users" on Ubuntu) and **g+rwx** permissions.
+
 ## Running the thing
 
 To get the command-line options, run:

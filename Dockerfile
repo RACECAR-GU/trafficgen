@@ -16,22 +16,27 @@ USER root
 RUN pip3 install -r requirements.txt
 RUN apt-get -y install x11-utils
 RUN apt-get -y install wget
+RUN apt-get -y install jq curl
 
 # install Tor Browser
 USER root
 WORKDIR /tor
 RUN chown user /tor
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/10.0.13/tor-browser-linux64-10.0.13_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-10.0.13_en-US.tar.xz
+RUN curl https://aus1.torproject.org/torbrowser/update_3/release/downloads.json | jq -r '.downloads.linux64["en-US"].binary' > url
+RUN wget `cat url`
+RUN basename `cat url` > tor-name
+RUN tar xvf `cat tor-name`
 
 # install alpha version of Tor Browser (necessary for Snowflake)
 USER root
 WORKDIR /tmp/tor-alpha
 RUN chown user /tmp/tor-alpha
 USER user
-RUN wget https://www.torproject.org/dist/torbrowser/10.5a8/tor-browser-linux64-10.5a8_en-US.tar.xz
-RUN tar xvf tor-browser-linux64-10.5a8_en-US.tar.xz
+RUN curl https://aus1.torproject.org/torbrowser/update_3/alpha/downloads.json | jq -r '.downloads.linux64["en-US"].binary' > url-alpha
+RUN wget `cat url-alpha`
+RUN basename `cat url-alpha` > tor-name-alpha
+RUN tar xvf `cat tor-name-alpha`
 USER root
 RUN mv /tmp/tor-alpha /tor-alpha
 

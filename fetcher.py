@@ -367,6 +367,7 @@ def direct_transport_worker(args, urls, worker_name, one_hop_descriptor,
                 profile.set_preference("network.proxy.type", 1)
                 profile.set_preference("network.proxy.http", "localhost")
                 profile.set_preference("network.proxy.http_port", port)
+                profile.set_preference("network.proxy.use_direct_on_fail", False)
 
                 with webdriver.Firefox(profile) as driver:
                     WebDriverWait(driver, timeout=10)

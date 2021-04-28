@@ -4,3 +4,4 @@
 [submodule "pt-proxy"]
 	path = pt-proxy
 	url = git@github.com:RACECAR-GU/pt-proxy.git
+	branch = main

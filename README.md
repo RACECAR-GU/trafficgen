@@ -60,3 +60,12 @@ If you look at the fetcher log file (above, it's called log.log), you can find t
 2020-04-08 01:58:28,888 root - INFO - [Bridge-obfs5-0] torrc = {'ControlPort': '45511', 'SOCKSPort': '43657', 'DataDirectory': '/tmp/tmpswo26xww', 'HiddenServiceStatistics': '0', 'DirReqStatistics': '0', 'Log': 'notice file /tmp/tmpswo26xww/tor.log', 'Bridge': 'obfs4 34.95.33.61:6666 F46116F9B4D288E816546D1F52CB93F88B2DC341 cert=DUgN3s+5x4zJLedfMcrNByzSqc0puUUYz+xJ3PqDNkEJvuZxXIwsxEkBYjNRlj1xBZniQA iat-mode=0', 'UseBridges': '1', 'ClientTransportPlugin': 'obfs4 exec /usr/bin/obfs5proxy'}
 ```
 here, the Tor log is in **/tmp/tmpswo26xww/tor.log**.
+
+
+
+You can also eavesdrop on the activities on the web fetcher via:
+
+`docker run --rm -it --network=container:beautiful_babbage ubuntu`
+
+substituting the name of the container being used by the running web fetcher for `beautiful_babbage` (see above).
+

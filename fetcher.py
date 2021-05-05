@@ -274,7 +274,8 @@ def tor_worker(args, urls, worker_name, bridge_type, bridge_line, time_check):
                                                  % (bridge_type,
                                                     transport_exec)
                 if bridge_type == 'snowflake':
-                    torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
+                    # torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.azureedge.net/ -front ajax.aspnetcdn.com -ice stun:stun.l.google.com:19302'
+                    torrc['ClientTransportPlugin'] += ' -url https://snowflake-broker.torproject.net.global.prod.fastly.net/ -front cdn.sstatic.net -ice stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478,stun:stun.altar.com.pl:3478,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.com:3478,stun:stun.sonetel.net:3478,stun:stun.stunprotocol.org:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478'
             logging.info('[%s] preferences = %s' % (worker_name, preferences))
             logging.info('[%s] torrc = %s' % (worker_name, torrc))
 

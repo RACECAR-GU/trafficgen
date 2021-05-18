@@ -171,8 +171,8 @@ def do_fetches(worker_name, driver, urls, args, time_check, reset_prob=None):
     """
     logger = logging.getLogger('fetcher.py')
 
-    driver.set_page_load_timeout(60)
-    driver.implicitly_wait(60)
+    driver.set_page_load_timeout(90)
+    driver.implicitly_wait(90)
 
     while True:
 

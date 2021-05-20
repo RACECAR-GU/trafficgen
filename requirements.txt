@@ -6,5 +6,5 @@ scapy==2.4.3
 selenium==3.141.0
 stem==1.8.0
 tbselenium==0.4.2
-urllib3==1.25.7
+urllib3>=1.25.8
 PySocks==1.7.1

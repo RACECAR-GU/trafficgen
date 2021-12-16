@@ -28,7 +28,7 @@ Or just run `./build.sh` that issues the above command.
 Briefly (and incompletely), the Dockerfile does the following (all within the Docker container/image):
 
 * installs Ubuntu with some X11 stuff and some additional tools (wget, curl, tcpdump, etc.)
-* fetches the latest stable and alpha versions of the [Tor Browser Bundle](https://torproject.org).
+* fetches the latest stable version of the [Tor Browser Bundle](https://torproject.org).
 * fetches and installs Go (version 1.13)
 * installs some Tor pluggable transports
   * [obfs5](https://github.com/RACECAR-GU/obfsX)

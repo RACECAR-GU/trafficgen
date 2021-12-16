@@ -29,16 +29,16 @@ RUN basename `cat url` > tor-name
 RUN tar xvf `cat tor-name`
 
 # install alpha version of Tor Browser (necessary for Snowflake)
-USER root
-WORKDIR /tmp/tor-alpha
-RUN chown user /tmp/tor-alpha
-USER user
-RUN curl https://aus1.torproject.org/torbrowser/update_3/alpha/downloads.json | jq -r '.downloads.linux64["en-US"].binary' > url-alpha
-RUN wget `cat url-alpha`
-RUN basename `cat url-alpha` > tor-name-alpha
-RUN tar xvf `cat tor-name-alpha`
-USER root
-RUN mv /tmp/tor-alpha /tor-alpha
+# USER root
+# WORKDIR /tmp/tor-alpha
+# RUN chown user /tmp/tor-alpha
+# USER user
+# RUN curl https://aus1.torproject.org/torbrowser/update_3/alpha/downloads.json | jq -r '.downloads.linux64["en-US"].binary' > url-alpha
+# RUN wget `cat url-alpha`
+# RUN basename `cat url-alpha` > tor-name-alpha
+# RUN tar xvf `cat tor-name-alpha`
+# USER root
+# RUN mv /tmp/tor-alpha /tor-alpha
 
 # install Tor
 WORKDIR /tor
@@ -97,9 +97,9 @@ RUN go build
 USER root
 RUN cp meek-client /usr/bin
 
-# copy snowflake from Tor alpha; put it somewhere we can easily find it
+# copy snowflake from Tor; put it somewhere we can easily find it
 USER root
-RUN cp /tor-alpha/tor-browser_en-US/Browser/TorBrowser/Tor/PluggableTransports/snowflake-client /usr/bin
+RUN cp /tor/tor-browser_en-US/Browser/TorBrowser/Tor/PluggableTransports/snowflake-client /usr/bin
 RUN chmod 755 /usr/bin/snowflake-client
 
 # add user to default Ubuntu users group (100)

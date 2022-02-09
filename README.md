@@ -14,6 +14,12 @@ The Traffic Generator itself is released under the MIT open source license.  See
 
 The traffic generator runs inside of Docker.  You need to build the docker image.  If docker isn't installed, install it.  Then make sure that your user has permission to run docker containers.
 
+Also, make sure that you've pulled the two submodules.
+```
+git submodule init
+git submodule update
+```
+
 Next, build the docker image via:
 ```
 docker build -t fetcher .
